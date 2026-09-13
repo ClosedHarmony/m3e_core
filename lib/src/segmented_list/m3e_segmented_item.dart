@@ -713,7 +713,7 @@ class _M3ESegmentedItemState extends State<M3ESegmentedItem> {
               child: Focus(
                 focusNode: _effectiveFocusNode,
                 autofocus: widget.autofocus,
-                canRequestFocus: widget.enabled && widget.isVisible,
+                canRequestFocus: hasInteraction,
                 onFocusChange: (focused) {
                   if (mounted && _isFocused != focused) {
                     setState(() => _isFocused = focused);
