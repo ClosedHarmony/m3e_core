@@ -357,6 +357,11 @@ void main() {
           MaterialApp(
             home: Scaffold(
               body: M3ESegmentedColumn(
+                // Interactive on purpose: only items with a handler mount a
+                // Focus node, so a column with nothing to activate has no tab
+                // stops at all (covered by the test below). This one is about
+                // there being exactly one stop per item.
+                onTap: (_) {},
                 children: const [
                   Text('Item 0'),
                   Text('Item 1'),
@@ -395,5 +400,41 @@ void main() {
         expect(ringsAfterTab3.length, 1);
       },
     );
+
+    testWidgets('a column with no handlers has no tab stops', (tester) async {
+      // Regression guard for stripping Focus/InkWell off non-interactive items.
+      // A column with nothing to activate must mount no Focus node at all, so
+      // it cannot compete for focus with a text field nested inside it -- which
+      // on touch devices used to flash the SegmentedFocusRing on the container
+      // before the field took focus.
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: M3ESegmentedColumn(
+              children: const [Text('Item 0'), Text('Item 1')],
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.descendant(
+          of: find.byType(M3ESegmentedItem),
+          matching: find.byType(Focus),
+        ),
+        findsNothing,
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+
+      expect(
+        tester.widgetList<SegmentedFocusRing>(
+          find.byWidgetPredicate((w) => w is SegmentedFocusRing && w.focused),
+        ),
+        isEmpty,
+      );
+    });
   });
 }

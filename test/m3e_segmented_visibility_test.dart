@@ -237,16 +237,25 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      final focuses = tester
-          .widgetList<Focus>(
-            find.descendant(
-              of: find.byType(M3ESegmentedItem).at(1),
-              matching: find.byType(Focus),
-            ),
-          )
-          .toList();
-      expect(focuses, isNotEmpty);
-      expect(focuses.first.canRequestFocus, isFalse);
+      final hiddenFocus = find.descendant(
+        of: find.byType(M3ESegmentedItem).at(1),
+        matching: find.byType(Focus),
+      );
+      final visibleFocus = find.descendant(
+        of: find.byType(M3ESegmentedItem).at(0),
+        matching: find.byType(Focus),
+      );
+
+      // The column IS interactive, so the visible item keeps its Focus node --
+      // which is what proves the hidden one lost its own because of isVisible
+      // rather than because the column has no handlers. An interactive item
+      // carries two Focus widgets (its own plus the one inside InkWell), hence
+      // findsWidgets rather than an exact count. A hidden item mounts none at
+      // all, strictly stronger than the previous canRequestFocus: false: there
+      // is no node left that could ever request focus, and no InkWell/Material
+      // hit-test path to grab it by accident.
+      expect(visibleFocus, findsWidgets);
+      expect(hiddenFocus, findsNothing);
     });
   });
 
