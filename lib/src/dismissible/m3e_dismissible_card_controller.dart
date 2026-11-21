@@ -233,7 +233,12 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
   void initSlots() => _syncSlots();
 
   void syncSlotsIfNeeded(int oldItemCount) {
-    if (swipeItemCount != oldItemCount) _syncSlots();
+    if (swipeItemCount != oldItemCount) {
+      if (_dragSlotRef != null) {
+        _cancelDragState(notify: false);
+      }
+      _syncSlots();
+    }
   }
 
   void disposeSlots() {
@@ -286,11 +291,10 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
   void _reindexDragSlot() {
     if (_dragSlotRef != null) {
       _dragSlotIndex = _slots.indexOf(_dragSlotRef!);
-      if (_dragSlotIndex < 0) {
-        // Slot was removed — cancel drag silently.
-        _dragSlotRef = null;
-        _dragOffset = 0.0;
-        _detachPush = 0.0;
+      final context = _measureKeys[_dragSlotRef!]?.currentContext;
+      if (_dragSlotIndex < 0 || (context != null && !context.mounted)) {
+        // Slot was removed or deactivated — cancel drag silently.
+        _cancelDragState(notify: false);
       }
     } else {
       _dragSlotIndex = -1;
@@ -303,14 +307,17 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
       _measureKeys.putIfAbsent(slot, () => GlobalKey());
 
   Size _cardSize(DismissibleSlot slot) {
-    final box =
-        _measureKeys[slot]?.currentContext?.findRenderObject() as RenderBox?;
+    final context = _measureKeys[slot]?.currentContext;
+    if (context == null || !context.mounted) return const Size(320, 52);
+    final box = context.findRenderObject() as RenderBox?;
     if (box == null || !box.hasSize) return const Size(320, 52);
     return box.size;
   }
 
   double get _dragProgress {
     if (_dragSlotRef == null) return 0.0;
+    final context = _measureKeys[_dragSlotRef!]?.currentContext;
+    if (context != null && !context.mounted) return 0.0;
     final w = _cardSize(_dragSlotRef!).width;
     return (_dragOffset.abs() / (w * style.dismissThreshold)).clamp(0.0, 1.0);
   }
@@ -684,8 +691,21 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
     }
   }
 
-  void _resetDragState() {
-    setState(() {
+  void _cancelDragState({bool notify = true}) {
+    _springCtrl?.stop(canceled: true);
+    _springCtrl?.dispose();
+    _springCtrl = null;
+    _nbrCtrl?.stop(canceled: true);
+    _nbrCtrl?.dispose();
+    _nbrCtrl = null;
+    _roundnessCtrl?.stop(canceled: true);
+    _roundnessCtrl?.dispose();
+    _roundnessCtrl = null;
+    _pushCtrl?.stop(canceled: true);
+    _pushCtrl?.dispose();
+    _pushCtrl = null;
+
+    void updateFields() {
       _dragSlotRef = null;
       _dragSlotIndex = -1;
       _dragOffset = 0.0;
@@ -695,8 +715,16 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
       _pastActionThreshold = false;
       _reEngaging = false;
       _roundnessFraction = 0.0;
-    });
+    }
+
+    if (notify && mounted) {
+      setState(updateFields);
+    } else {
+      updateFields();
+    }
   }
+
+  void _resetDragState() => _cancelDragState(notify: true);
 
   void _playPullHaptics() {
     if (!style.enableFeedback) return;
@@ -1032,9 +1060,20 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
         event.logicalKey == LogicalKeyboardKey.space) {
       final action = actionList[actionIndex];
       action.haptic.apply();
-      action.onTap?.call();
-      _springBack(1.0);
-      slot.focusNode.requestFocus();
+      if (action.dismissOnTap) {
+        final slotIndex = _slots.indexOf(slot);
+        final dir = swipingRight
+            ? DismissDirection.startToEnd
+            : DismissDirection.endToStart;
+        if (slotIndex >= 0) {
+          _dismiss(slotIndex, 1.0, dir, executePrimaryAction: false);
+        }
+        action.onTap?.call();
+      } else {
+        action.onTap?.call();
+        _springBack(1.0);
+        slot.focusNode.requestFocus();
+      }
       return KeyEventResult.handled;
     }
 
@@ -1184,6 +1223,7 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
   // ── Spring-back (below threshold release) ──
 
   void _springBack(double speedMul) {
+    if (_dragSlotRef == null) return;
     _targetOffset = 0.0;
     _pushCtrl?.dispose();
     _pushCtrl = null;
@@ -1255,8 +1295,9 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
   Future<void> _dismiss(
     int slotIndex,
     double speedMul,
-    DismissDirection direction,
-  ) async {
+    DismissDirection direction, {
+    bool executePrimaryAction = true,
+  }) async {
     if (slotIndex < 0 || slotIndex >= _slots.length) return;
 
     final slot = _slots[slotIndex];
@@ -1326,10 +1367,10 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
     });
 
     // ── Fly-out spring ──
-    final flySign = flyInitial.sign;
-    final flyTarget = flySign == 0
-        ? slot.capturedWidth + 80.0
-        : flySign * (slot.capturedWidth + 80.0);
+    final flySign = (flyInitial != 0)
+        ? flyInitial.sign
+        : (direction == DismissDirection.endToStart ? -1.0 : 1.0);
+    final flyTarget = flySign * (slot.capturedWidth + 80.0);
 
     slot.flyCtrl?.dispose();
     final flyCtrl = SingleMotionController(
@@ -1371,7 +1412,7 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
       ..animateTo(flyTarget);
 
     // ── Auto-execute primary action on full swipe if configured ──
-    if (style.autoExecutePrimaryOnFullSwipe) {
+    if (executePrimaryAction && style.autoExecutePrimaryOnFullSwipe) {
       final swipingRight = direction == DismissDirection.startToEnd;
       final actionList = swipingRight
           ? style.actions
@@ -1467,7 +1508,9 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
                     ValueListenableBuilder<double>(
                       valueListenable: slot.flyNotifier,
                       builder: (_, flyOff, child) {
-                        final progress = flyOff.abs();
+                        final progress = slot.capturedWidth > 0
+                            ? flyOff.abs().clamp(0.0, slot.capturedWidth)
+                            : flyOff.abs();
                         final swipingRight =
                             slot.dismissedDirection ==
                             DismissDirection.startToEnd;
@@ -1507,10 +1550,38 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
                       child: IgnorePointer(
                         child: ValueListenableBuilder<double>(
                           valueListenable: slot.flyNotifier,
-                          builder: (_, flyOff, child) => Transform.translate(
-                            offset: Offset(flyOff, 0),
-                            child: child,
-                          ),
+                          builder: (_, flyOff, child) {
+                            final double flyDist = flyOff.abs();
+                            final double capWidth = slot.capturedWidth > 0
+                                ? slot.capturedWidth
+                                : 320.0;
+                            final double progress = (flyDist / capWidth).clamp(
+                              0.0,
+                              1.0,
+                            );
+                            final double cardOpacity = progress <= 0.2
+                                ? 1.0
+                                : (1.0 - ((progress - 0.2) / 0.8)).clamp(
+                                    0.0,
+                                    1.0,
+                                  );
+                            final double collapseFade = (1.0 - ctrl.value * 2.0)
+                                .clamp(0.0, 1.0);
+                            final double effectiveOpacity =
+                                cardOpacity * collapseFade;
+
+                            if (effectiveOpacity <= 0.0) {
+                              return const SizedBox.shrink();
+                            }
+
+                            return Transform.translate(
+                              offset: Offset(flyOff, 0),
+                              child: Opacity(
+                                opacity: effectiveOpacity,
+                                child: child,
+                              ),
+                            );
+                          },
                           child: Padding(
                             padding: s.margin ?? EdgeInsets.zero,
                             child: _FlyingCard(
@@ -1941,6 +2012,20 @@ mixin M3EDismissibleCardMixin<T extends StatefulWidget>
                                     ),
                                 onTriggered: () {
                                   _springBack(1.0);
+                                },
+                                onDismissTriggered: () {
+                                  final slotIndex = _slots.indexOf(slot);
+                                  if (slotIndex >= 0) {
+                                    final dir = swipingRight
+                                        ? DismissDirection.startToEnd
+                                        : DismissDirection.endToStart;
+                                    _dismiss(
+                                      slotIndex,
+                                      1.0,
+                                      dir,
+                                      executePrimaryAction: false,
+                                    );
+                                  }
                                 },
                               ),
                             ),

@@ -68,6 +68,7 @@ class M3EToggleButtonGroupAction {
     this.semanticLabel,
     this.tooltip,
     this.enableFeedback,
+    this.minSquishPadding,
   }) : assert(
          icon != null || label != null,
          'M3EToggleButtonGroupAction must have either an icon or a label.',
@@ -102,6 +103,9 @@ class M3EToggleButtonGroupAction {
   ///
   /// When provided, this overrides the button's natural content-based width.
   final double? width;
+
+  /// The minimum horizontal padding retained per side when compressed by neighbor squish.
+  final double? minSquishPadding;
 
   // ── Effective value helpers ──────────────────────────────────────────────
 
@@ -198,6 +202,10 @@ class M3EToggleButtonGroup extends StatefulWidget {
     /// Neighbors shrink proportionally to accommodate the expansion.
     /// Defaults to `0.15`.
     this.expandedRatio = 0.15,
+
+    /// The minimum horizontal padding retained per side when a button is compressed by neighbor squish.
+    /// Defaults to `ButtonConstants.kDefaultMinSquishPadding` (4.0).
+    this.minSquishPadding = ButtonConstants.kDefaultMinSquishPadding,
 
     this.haptic = M3EHapticFeedback.none,
     this.enableFeedback = true,
@@ -320,6 +328,9 @@ class M3EToggleButtonGroup extends StatefulWidget {
   /// Neighbors shrink proportionally to accommodate the expansion.
   final double expandedRatio;
 
+  /// The minimum horizontal padding retained per side when a button is compressed by neighbor squish.
+  final double minSquishPadding;
+
   /// Haptic feedback intensity for button interactions.
   ///
   /// See [M3EHapticFeedback] for available levels.
@@ -392,8 +403,8 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
 
   final ValueNotifier<int?> _focusedIndexNotifier = ValueNotifier<int?>(null);
 
-  // P0-8: Directionality read once per build and reused by every
-  // _buildButton call — avoids N InheritedWidget lookups per frame.
+  // P0-8: Directionality read once per build and reused by the keyboard
+  // shortcuts and the overflow strategy.
   bool _isRtl = false;
 
   // Generation counter to ensure asynchronous remeasure callbacks do not
@@ -762,6 +773,11 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
         checkedLabel: action.checkedLabel,
         enabled: action.enabled,
         enableFeedback: action.enableFeedback ?? widget.enableFeedback,
+        minSquishPadding:
+            action.minSquishPadding ??
+            action.decoration?.minSquishPadding ??
+            widget.decoration?.minSquishPadding ??
+            widget.minSquishPadding,
         onCheckedChange: (_) {},
       );
     }
@@ -782,6 +798,11 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
           checkedLabel: action.checkedLabel,
           enabled: action.enabled,
           enableFeedback: action.enableFeedback ?? widget.enableFeedback,
+          minSquishPadding:
+              action.minSquishPadding ??
+              action.decoration?.minSquishPadding ??
+              widget.decoration?.minSquishPadding ??
+              widget.minSquishPadding,
           onCheckedChange: (_) {},
         ),
         M3EToggleButton(
@@ -796,6 +817,11 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
           checkedLabel: action.checkedLabel,
           enabled: action.enabled,
           enableFeedback: action.enableFeedback ?? widget.enableFeedback,
+          minSquishPadding:
+              action.minSquishPadding ??
+              action.decoration?.minSquishPadding ??
+              widget.decoration?.minSquishPadding ??
+              widget.minSquishPadding,
           onCheckedChange: (_) {},
         ),
       ],
@@ -1015,7 +1041,7 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
     );
     final spacing =
         widget.spacing ?? (widget._connected ? 0.0 : metrics.spacing);
-    // Read directionality once — shared by all _buildButton calls.
+    // Read directionality once per build.
     _isRtl = Directionality.of(context) == TextDirection.rtl;
 
     Widget group = M3EButtonGroupProvider(
@@ -1739,10 +1765,6 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
 
     final bool checked = _isToggleActionSelected(index);
 
-    // Use _isRtl cached once per build() — avoids N Directionality.of() calls.
-    final isVisualFirst = _isRtl ? isLast : isFirst;
-    final isVisualLast = _isRtl ? isFirst : isLast;
-
     Widget button = M3EToggleButton(
       icon: action.icon,
       checkedIcon: action.checkedIcon,
@@ -1753,8 +1775,13 @@ class _M3EToggleButtonGroupState extends State<M3EToggleButtonGroup>
       style: widget.style,
       size: _mapSize(widget.size, actionWidth: action.width),
       isGroupConnected: widget._connected,
-      isFirstInGroup: isVisualFirst,
-      isLastInGroup: isVisualLast,
+      isFirstInGroup: isFirst,
+      isLastInGroup: isLast,
+      minSquishPadding:
+          action.minSquishPadding ??
+          action.decoration?.minSquishPadding ??
+          widget.decoration?.minSquishPadding ??
+          widget.minSquishPadding,
       decoration: _cachedDecorations[index],
       statesController: _controllers[index],
       focusNode: action.focusNode ?? _focusNodes[index],

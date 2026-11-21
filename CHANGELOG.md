@@ -1,3 +1,21 @@
+# 1.1.5
+- menu: introduce `M3EMenuAnchor`, `M3ESubmenuButton`, `M3EMenuItemButton`, `M3ECheckboxMenuButton`, `M3ERadioMenuButton`, and `M3EPopupMenuButton`
+- menu: support spring-driven entrance and reveal animations (`popup` and `dropdown`)
+- menu: support cascading submenus with cursor safety zones via `M3EMagicTriangle`
+- menu: support segmented menu groups (`M3EMenuGroup`, `M3EMenuGroupLabel`) with dynamic corner morphing
+- menu: add keyboard shortcut alignment, accessibility semantics, and subtree directionality preservation
+- buttons: adapt padding during neighbor squish to prevent label cutoff
+- buttons: support custom `minSquishPadding` on `M3EToggleButtonGroup` and `M3EToggleButtonGroupAction`
+- example: add interactive M3EMenu playground with live preview, controls, and code snippets
+
+# 1.1.4
+- segmented-list: let M3ESegmentedItem own isVisible so hidden items keep their surface
+- segmented-list: add isVisible to exclude hidden children from gap and radius math
+dismissible: guard inactive element measurement and reset drag on item removal
+- buttons: dismiss split button popup on layout and metric changes
+- button: use Material 3's 20dp for sm split button leading icon
+- dismissible: support dismissOnTap on swipe actions and programmatic dismiss
+
 # 1.1.3
 - dropdown: add keyboard navigation and focus ring support
 - segmented-list: add keyboard navigation and focus ring support

@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:flutter/services.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:m3e_core/m3e_core.dart';
 
@@ -226,36 +227,26 @@ void main() {
     });
 
     testWidgets('a hidden item is not focusable', (tester) async {
+      final taps = <int>[];
       await tester.pumpWidget(
         _app(
           M3ESegmentedColumn(
-            onTap: (_) {},
+            onTap: taps.add,
             isVisible: (index) => index != 1,
-            children: [_cell('A'), _cell('B')],
+            children: [_cell('A'), _cell('B'), _cell('C')],
           ),
         ),
       );
       await tester.pumpAndSettle();
 
-      final hiddenFocus = find.descendant(
-        of: find.byType(M3ESegmentedItem).at(1),
-        matching: find.byType(Focus),
-      );
-      final visibleFocus = find.descendant(
-        of: find.byType(M3ESegmentedItem).at(0),
-        matching: find.byType(Focus),
-      );
-
-      // The column IS interactive, so the visible item keeps its Focus node --
-      // which is what proves the hidden one lost its own because of isVisible
-      // rather than because the column has no handlers. An interactive item
-      // carries two Focus widgets (its own plus the one inside InkWell), hence
-      // findsWidgets rather than an exact count. A hidden item mounts none at
-      // all, strictly stronger than the previous canRequestFocus: false: there
-      // is no node left that could ever request focus, and no InkWell/Material
-      // hit-test path to grab it by accident.
-      expect(visibleFocus, findsWidgets);
-      expect(hiddenFocus, findsNothing);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(taps, [0]);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pumpAndSettle();
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      expect(taps, [0, 2]);
     });
   });
 

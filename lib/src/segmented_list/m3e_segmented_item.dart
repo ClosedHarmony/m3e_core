@@ -535,10 +535,7 @@ class _M3ESegmentedItemState extends State<M3ESegmentedItem> {
     );
 
     if (!hasInteraction) {
-      return Material(
-        type: MaterialType.transparency,
-        child: paddedContent,
-      );
+      return Material(type: MaterialType.transparency, child: paddedContent);
     }
 
     return Material(

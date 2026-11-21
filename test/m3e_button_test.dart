@@ -49,7 +49,7 @@ void main() {
         await tester.pumpAndSettle();
 
         final buttons = tester.widgetList<M3EToggleButton>(
-          find.byType(M3EToggleButton),
+          find.byType(M3EToggleButton).hitTestable(),
         );
         expect(buttons.length, 2);
 
@@ -62,6 +62,66 @@ void main() {
         expect(secondButton.size.width, 80);
       },
     );
+  });
+
+  group('M3EToggleButtonGroup connected corners', () {
+    String outerSide(WidgetTester tester, Finder button) {
+      final material = tester.widget<Material>(
+        find.descendant(of: button, matching: find.byType(Material)).first,
+      );
+      final radius = (material.shape! as RoundedRectangleBorder).borderRadius
+          .resolve(Directionality.of(tester.element(button)));
+      return radius.topLeft.x > radius.topRight.x ? 'left' : 'right';
+    }
+
+    for (final direction in TextDirection.values) {
+      testWidgets('end buttons round their outer edge in ${direction.name}', (
+        WidgetTester tester,
+      ) async {
+        // Arrange
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Directionality(
+              textDirection: direction,
+              child: Scaffold(
+                body: Center(
+                  child: M3EToggleButtonGroup(
+                    type: M3EButtonGroupType.connected,
+                    selectedIndex: 1,
+                    onSelectedIndexChanged: (_) {},
+                    actions: const [
+                      M3EToggleButtonGroupAction(label: Text('A')),
+                      M3EToggleButtonGroupAction(label: Text('B')),
+                      M3EToggleButtonGroupAction(label: Text('C')),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Act
+        // The group also builds hidden, unconnected buttons to measure them.
+        final buttons = find.byWidgetPredicate(
+          (widget) => widget is M3EToggleButton && widget.isGroupConnected,
+        );
+        final byLeftEdge =
+            [for (var i = 0; i < buttons.evaluate().length; i++) buttons.at(i)]
+              ..sort(
+                (a, b) =>
+                    tester.getRect(a).left.compareTo(tester.getRect(b).left),
+              );
+        final sides = [
+          outerSide(tester, byLeftEdge.first),
+          outerSide(tester, byLeftEdge.last),
+        ];
+
+        // Assert
+        expect(sides, ['left', 'right']);
+      });
+    }
   });
 
   group('M3ESplitButtonDecoration', () {
@@ -166,5 +226,108 @@ void main() {
       );
       expect(fromStyle.splashFactory, InkRipple.splashFactory);
     });
+
+    test('M3EToggleButtonDecoration supports minSquishPadding', () {
+      const dec = M3EToggleButtonDecoration(minSquishPadding: 6.0);
+      expect(dec.minSquishPadding, 6.0);
+
+      final copy = dec.copyWith(minSquishPadding: 2.0);
+      expect(copy.minSquishPadding, 2.0);
+
+      final fromStyle = M3EToggleButtonDecoration.styleFrom(
+        minSquishPadding: 8.0,
+      );
+      expect(fromStyle.minSquishPadding, 8.0);
+    });
+  });
+
+  group('M3EToggleButtonGroup MinSquishPadding', () {
+    testWidgets(
+      'group propagates minSquishPadding and allows action override',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: M3EToggleButtonGroup(
+                  minSquishPadding: 2.0,
+                  selectedIndex: 0,
+                  onSelectedIndexChanged: (_) {},
+                  actions: const [
+                    M3EToggleButtonGroupAction(
+                      icon: Icon(Icons.format_bold),
+                      label: Text('Bold'),
+                    ),
+                    M3EToggleButtonGroupAction(
+                      icon: Icon(Icons.format_italic),
+                      label: Text('Italic'),
+                      minSquishPadding: 6.0,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        final buttons = tester.widgetList<M3EToggleButton>(
+          find.byType(M3EToggleButton).hitTestable(),
+        );
+        expect(buttons.length, 2);
+
+        expect(buttons.elementAt(0).minSquishPadding, 2.0);
+        expect(buttons.elementAt(1).minSquishPadding, 6.0);
+      },
+    );
+
+    testWidgets(
+      'labels remain rendered and visible during neighbor squishing',
+      (WidgetTester tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: SizedBox(
+                  width: 260,
+                  child: M3EToggleButtonGroup(
+                    neighborSquish: true,
+                    expandedRatio: 0.25,
+                    minSquishPadding: 2.0,
+                    selectedIndex: 0,
+                    onSelectedIndexChanged: (_) {},
+                    actions: const [
+                      M3EToggleButtonGroupAction(
+                        icon: Icon(Icons.format_bold),
+                        label: Text('Bold'),
+                      ),
+                      M3EToggleButtonGroupAction(
+                        icon: Icon(Icons.format_italic),
+                        label: Text('Italic'),
+                      ),
+                      M3EToggleButtonGroupAction(
+                        icon: Icon(Icons.format_underlined),
+                        label: Text('Underline'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+        await tester.pumpAndSettle();
+
+        // Tap the third action to squish neighbors
+        await tester.tap(find.byType(M3EToggleButton).hitTestable().last);
+        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 100));
+
+        // Verify all labels are still found in tree
+        expect(find.text('Bold'), findsWidgets);
+        expect(find.text('Italic'), findsWidgets);
+        expect(find.text('Underline'), findsWidgets);
+      },
+    );
   });
 }
